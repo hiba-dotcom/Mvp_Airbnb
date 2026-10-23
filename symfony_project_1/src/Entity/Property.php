@@ -14,14 +14,16 @@ use App\State\PropertyOwnerProcessor;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\State\PropertyDeleteProcessor;
 
 #[ApiResource(
     operations: [
         new GetCollection(),
+        new GetCollection(uriTemplate: '/my/properties', name: 'my_properties'),
         new Get(),
         new Post(processor: PropertyOwnerProcessor::class),
         new Patch(security: 'object.getOwner() == user'),
-        new Delete(security: 'object.getOwner() == user'),
+        new Delete(security: 'object.getOwner() == user', processor: PropertyDeleteProcessor::class),
     ],
 )]
 #[ORM\Entity(repositoryClass: PropertyRepository::class)]

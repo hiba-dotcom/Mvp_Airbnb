@@ -1,17 +1,20 @@
 import { useState, type FormEvent } from 'react';
-import { createProperty } from './api';
+import { createProperty, updateProperty } from './api';
+import type { Property } from './types';
 
 interface PropertyFormProps {
   token: string;
-  onCreated: () => void;
+  property?: Property;
+  onSaved: () => void;
+  onCancel?: () => void;
 }
 
-function PropertyForm({ token, onCreated }: PropertyFormProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [city, setCity] = useState('');
-  const [pricePerNight, setPricePerNight] = useState('');
-  const [maxGuests, setMaxGuests] = useState('');
+function PropertyForm({ token, property, onSaved, onCancel }: PropertyFormProps) {
+  const [title, setTitle] = useState(property?.title ?? '');
+  const [description, setDescription] = useState(property?.description ?? '');
+  const [city, setCity] = useState(property?.city ?? '');
+  const [pricePerNight, setPricePerNight] = useState(property ? String(property.pricePerNight) : '');
+  const [maxGuests, setMaxGuests] = useState(property ? String(property.maxGuests) : '');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,20 +23,26 @@ function PropertyForm({ token, onCreated }: PropertyFormProps) {
     setError(null);
     setSubmitting(true);
 
+    const input = {
+      title,
+      description,
+      city,
+      pricePerNight: Number(pricePerNight),
+      maxGuests: Number(maxGuests),
+    };
+
     try {
-      await createProperty(token, {
-        title,
-        description,
-        city,
-        pricePerNight: Number(pricePerNight),
-        maxGuests: Number(maxGuests),
-      });
-      setTitle('');
-      setDescription('');
-      setCity('');
-      setPricePerNight('');
-      setMaxGuests('');
-      onCreated();
+      if (property) {
+        await updateProperty(token, property.id, input);
+      } else {
+        await createProperty(token, input);
+        setTitle('');
+        setDescription('');
+        setCity('');
+        setPricePerNight('');
+        setMaxGuests('');
+      }
+      onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue.');
     } finally {
@@ -43,7 +52,7 @@ function PropertyForm({ token, onCreated }: PropertyFormProps) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 8, maxWidth: 420, marginBottom: 24 }}>
-      <h2>Publier une annonce</h2>
+      <h2>{property ? "Modifier l'annonce" : 'Publier une annonce'}</h2>
       <input placeholder="Titre (5 caractères minimum)" value={title} onChange={(e) => setTitle(e.target.value)} required />
       <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} required />
       <input placeholder="Ville" value={city} onChange={(e) => setCity(e.target.value)} required />
@@ -52,9 +61,16 @@ function PropertyForm({ token, onCreated }: PropertyFormProps) {
 
       {error && <p style={{ color: 'crimson', margin: 0 }}>{error}</p>}
 
-      <button type="submit" disabled={submitting}>
-        {submitting ? '...' : "Publier l'annonce"}
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="submit" disabled={submitting}>
+          {submitting ? '...' : property ? 'Enregistrer' : "Publier l'annonce"}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel}>
+            Annuler
+          </button>
+        )}
+      </div>
     </form>
   );
 }

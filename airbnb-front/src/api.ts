@@ -131,3 +131,42 @@ export async function createBooking(token: string, input: BookingInput): Promise
 
   return response.json();
 }
+
+export async function getMyProperties(token: string): Promise<Property[]> {
+  const response = await fetch(`${API_URL}/my/properties`, {
+    headers: { Accept: 'application/ld+json', Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    await throwApiError(response);
+  }
+
+  const data: Collection<Property> = await response.json();
+
+  return data.member ?? data['hydra:member'] ?? [];
+}
+
+export async function updateProperty(token: string, id: number, input: PropertyInput): Promise<Property> {
+  const response = await fetch(`${API_URL}/properties/${id}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/merge-patch+json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    await throwApiError(response);
+  }
+
+  return response.json();
+}
+
+export async function deleteProperty(token: string, id: number): Promise<void> {
+  const response = await fetch(`${API_URL}/properties/${id}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/ld+json', Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    await throwApiError(response);
+  }
+}
