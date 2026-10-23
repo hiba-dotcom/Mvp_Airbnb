@@ -1,0 +1,149 @@
+# Airbnb MVP
+
+MVP d'une plateforme de location de logements inspirée d'Airbnb. Les propriétaires publient des annonces, les voyageurs les consultent et réservent des dates.
+
+Projet d'apprentissage construit pas à pas avec **Symfony**, **API Platform** et **React + TypeScript**.
+
+## Fonctionnalités
+
+- Inscription et connexion (authentification par token JWT)
+- Consultation publique des annonces (sans compte)
+- Publication, modification et suppression de ses propres annonces
+- Page « Mes annonces »
+- Réservation d'une annonce avec dates d'arrivée et de départ
+- Prix total calculé par le serveur (nombre de nuits × prix par nuit)
+- Refus des réservations qui se chevauchent sur une même annonce
+- Liste « Mes réservations » côté API
+
+## Stack technique
+
+| Partie | Technologies |
+|---|---|
+| Backend | PHP 8.2+, Symfony 7.3+, API Platform, Doctrine ORM |
+| Authentification | LexikJWTAuthenticationBundle (JWT) |
+| Base de données | MySQL / MariaDB |
+| Frontend | React, TypeScript, Vite |
+
+## Structure du dépôt
+
+```
+.
+├── symfony_project_1/    # API (Symfony + API Platform)
+│   ├── config/
+│   ├── migrations/
+│   └── src/
+│       ├── Entity/       # User, Property, Booking
+│       ├── Repository/   # Requêtes Doctrine (ex. détection de chevauchement)
+│       ├── State/        # Processors API Platform (mot de passe, propriétaire, prix, suppression)
+│       └── Doctrine/     # Extensions de filtre (mes annonces, mes réservations)
+└── airbnb-front/         # Interface (React + TypeScript + Vite)
+    └── src/
+        ├── api.ts        # Appels à l'API
+        ├── auth.ts       # Stockage du token
+        └── *.tsx         # Composants (formulaires, liste d'annonces)
+```
+
+## Prérequis
+
+- PHP 8.2 ou plus, avec les extensions `pdo_mysql` et `openssl`
+- Composer
+- Symfony CLI
+- MySQL ou MariaDB (par exemple via XAMPP ou Laragon)
+- Node.js 20.19 ou plus récent (ou 22.12+)
+
+## Installation du backend
+
+Depuis le dossier `symfony_project_1` :
+
+```bash
+composer install
+```
+
+### 1. Configurer la base de données
+
+Crée un fichier `.env.local` (non versionné) avec ta connexion :
+
+```
+DATABASE_URL="mysql://root:@127.0.0.1:3306/symfony_api?serverVersion=mariadb-10.4.28&charset=utf8mb4"
+```
+
+Adapte l'utilisateur, le mot de passe et la version. Avec MariaDB, la valeur de `serverVersion` doit commencer par `mariadb-` ; avec MySQL, indique par exemple `8.0.36`. Pour connaître ta version : `symfony console dbal:run-sql "SELECT VERSION()"`.
+
+### 2. Créer la base et les tables
+
+```bash
+symfony console doctrine:database:create
+symfony console doctrine:migrations:migrate
+```
+
+### 3. Générer les clés JWT
+
+```bash
+symfony console lexik:jwt:generate-keypair
+```
+
+Sous Windows avec XAMPP, si la commande échoue avec `error:80000003:system library::No such process`, indique d'abord l'emplacement de la configuration OpenSSL :
+
+```powershell
+$env:OPENSSL_CONF = "C:\xampp\php\extras\ssl\openssl.cnf"
+symfony console lexik:jwt:generate-keypair
+```
+
+Les clés sont créées dans `config/jwt/`. **Ne les versionne jamais** (vérifie que `/config/jwt/*.pem` et `.env.local` sont dans le `.gitignore`).
+
+### 4. Lancer l'API
+
+```bash
+symfony server:start
+```
+
+La documentation interactive (Swagger) est disponible sur `http://127.0.0.1:8000/api`. Pour tester les routes protégées, clique sur **Authorize** et saisis `Bearer ` suivi de ton token.
+
+## Installation du frontend
+
+Depuis le dossier `airbnb-front` :
+
+```bash
+npm install
+npm run dev
+```
+
+L'application est disponible sur `http://localhost:5173`. L'adresse de l'API est définie dans `src/api.ts` (`API_URL`). Le CORS est configuré côté Symfony (`config/packages/nelmio_cors.yaml`) pour accepter `localhost` et `127.0.0.1`.
+
+## Routes de l'API
+
+| Méthode | Route | Accès | Description |
+|---|---|---|---|
+| POST | `/api/users` | Public | Inscription |
+| POST | `/api/login` | Public | Connexion, renvoie un token JWT |
+| GET | `/api/properties` | Public | Liste des annonces |
+| GET | `/api/properties/{id}` | Public | Détail d'une annonce |
+| GET | `/api/my/properties` | Connecté | Mes annonces |
+| POST | `/api/properties` | Connecté | Publier une annonce (propriétaire = utilisateur connecté) |
+| PATCH | `/api/properties/{id}` | Propriétaire | Modifier une annonce |
+| DELETE | `/api/properties/{id}` | Propriétaire | Supprimer une annonce (refusé s'il existe des réservations) |
+| GET | `/api/bookings` | Connecté | Mes réservations |
+| GET | `/api/bookings/{id}` | Voyageur ou propriétaire | Détail d'une réservation |
+| POST | `/api/bookings` | Connecté | Réserver une annonce |
+| DELETE | `/api/bookings/{id}` | Voyageur | Annuler une réservation |
+
+Pour la connexion, envoie `{"email": "...", "password": "..."}` ; pour l'inscription, le champ du mot de passe s'appelle `plainPassword`.
+
+## Règles métier
+
+- Le propriétaire d'une annonce et le voyageur d'une réservation sont déterminés par le serveur à partir du token : le client ne peut pas les choisir.
+- Le prix total d'une réservation est calculé par le serveur.
+- La date d'arrivée ne peut pas être dans le passé, et la date de départ doit être postérieure à la date d'arrivée.
+- Deux réservations d'une même annonce ne peuvent pas se chevaucher (réponse `409`). Le jour de départ d'une réservation peut être le jour d'arrivée de la suivante.
+- Une annonce qui a des réservations ne peut pas être supprimée (réponse `409`).
+- Les mots de passe sont hashés et n'apparaissent jamais dans les réponses de l'API.
+
+## Limites connues et pistes d'amélioration
+
+- `GET /api/users` est accessible à tout utilisateur connecté et expose les emails : à restreindre (par exemple aux administrateurs) ou à retirer.
+- Le token expire au bout d'une heure et il n'y a pas de renouvellement automatique : l'utilisateur doit se reconnecter.
+- Le token est conservé dans le `localStorage` du navigateur ; en production, un cookie `HttpOnly` est préférable.
+- Pas encore de page « Mes réservations » ni d'annulation côté frontend.
+- Pas de recherche par ville ni de pagination côté interface.
+- Pas de tests automatisés.
+- Pas de rôle administrateur, de photos, d'avis ni de paiement.
